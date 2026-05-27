@@ -1,7 +1,0 @@
-Flask
-opencv-python
-numpy
-easyocr
-requests
-matplotlib
-Pillow

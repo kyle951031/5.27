@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>完全前端多期數智慧發票即時對獎系統 (精準辨識加強版)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Microsoft JhengHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f7ff; color: #102a43; }
+    .page { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+    header h1 { margin: 0; font-size: clamp(2rem, 3vw, 3rem); line-height: 1.05; }
+    header p { margin: 0; max-width: 720px; color: #334e68; font-size: 1rem; line-height: 1.6; }
+    .layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+    .card { background: #ffffff; border-radius: 24px; box-shadow: 0 20px 40px rgba(16, 42, 67, 0.08); padding: 24px; }
+    .period-select { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 1rem; }
+    .video-frame { position: relative; background: #000; border-radius: 24px; overflow: hidden; min-height: 420px; display: grid; place-items: center; }
+    .scan-guide { position: absolute; top: 25%; left: 10%; width: 80%; height: 20%; border: 3px dashed #38bdf8; border-radius: 18px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    .controls { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 14px; }
+    .primary-btn { flex: 1; min-width: 220px; border: none; border-radius: 999px; padding: 16px 24px; background: linear-gradient(135deg, #2563eb, #38bdf8); color: white; font-size: 1rem; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .primary-btn:hover { transform: translateY(-2px); box-shadow: 0 18px 36px rgba(56, 189, 248, 0.25); }
+    .info-block { display: grid; gap: 18px; }
+    .info-title { font-size: 1.05rem; margin: 0 0 8px; color: #102a43; font-weight: bold; }
+    .info-card { padding: 20px; background: #eef5ff; border-radius: 22px; border: 1px solid #dbeafe; }
+    .info-card strong { display: inline-block; margin-bottom: 10px; color: #0f172a; }
+    .result-text { margin: 0; white-space: pre-wrap; font-size: 1rem; line-height: 1.75; color: #102a43; }
+    .data-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+    .data-card { padding: 16px 18px; background: #ffffff; border: 1px solid #d8e9f8; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; }
+    .data-card span { color: #334e68; }
+    .data-card strong { font-size: 1.1rem; color: #0f172a; }
+    .chart-card { margin-top: 18px; padding: 18px; background: #ffffff; border: 1px solid #d8e9f8; border-radius: 24px; }
+    .chart-card canvas { width: 100% !important; height: auto !important; }
+    #snapshotCanvas { display: none; }
+    #previewCanvas { width: 100%; max-height: 260px; border-radius: 20px; background: #f8fafc; display: none; margin-top: 18px; border: 2px solid #cbd5e1; }
+    .secondary-btn { flex: 1; min-width: 220px; border: 1px solid #2563eb; border-radius: 999px; padding: 16px 24px; background: white; color: #2563eb; font-size: 1rem; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
+    .secondary-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(37, 99, 235, 0.15); }
+    .footer { margin-top: 32px; text-align: center; color: #64748b; font-size: 0.95rem; }
+    @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 680px) { header { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>完全前端多期數智慧發票即時對獎系統</h1>
+        <p>純前端實作高精確度發票辨識。整合高權重最大文字尺寸過濾器，自動剔除雜訊號碼，鎖定單一核心發票號碼。</p>
+      </div>
+      <div class="info-card" style="min-width: 280px;">
+        <strong>發票 / 中獎期數選擇：</strong>
+        <select id="periodSelect" class="period-select">
+          <option value="1-2月">1-2月</option>
+          <option value="3-4月">3-4月</option>
+          <option value="custom">自訂期數區間</option>
+        </select>
+        <div id="customRangeBlock" style="display:none; margin-top: 12px; gap: 8px; display:grid;">
+          <label style="font-size:0.95rem; margin-bottom: 6px;">自訂期數區間：</label>
+          <div style="display:flex; gap: 8px; align-items:center;">
+            <input id="startMonth" class="period-select" type="number" min="1" max="12" value="1" style="flex:1;" />
+            <span style="white-space: nowrap;">至</span>
+            <input id="endMonth" class="period-select" type="number" min="1" max="12" value="2" style="flex:1;" />
+          </div>
+          <small style="color:#475569;">請輸入起始月與結束月，例如 5-6 月。</small>
+        </div>
+      </div>
+    </header>
+
+    <div class="info-card" style="margin-bottom: 18px; border-left: 5px solid #2563eb;">
+      <strong>系統狀態：</strong>
+      <p id="statusText" class="result-text">正在載入中獎號碼與核心 OCR 辨識引擎...</p>
+    </div>
+
+    <div class="layout">
+      <section class="card">
+        <div class="video-frame">
+          <video id="cameraVideo" playsinline autoplay muted></video>
+          <canvas id="snapshotCanvas"></canvas>
+          <div class="scan-guide"></div>
+        </div>
+        <div class="controls">
+          <button id="startCameraBtn" class="primary-btn" type="button">啟用攝影機</button>
+          <button id="captureBtn" class="primary-btn" type="button">擷取畫面並對獎</button>
+          <button id="resetCountBtn" class="secondary-btn" type="button">刷新辨識數</button>
+          <label for="uploadImageInput" class="secondary-btn">上傳圖片對獎</label>
+          <input id="uploadImageInput" type="file" accept="image/*" style="display:none;" />
+        </div>
+        <h3 style="margin-top: 20px; font-size: 1.1rem;">AI 前處理影像預覽（送交辨識的真實黑白除噪畫面）：</h3>
+        <canvas id="previewCanvas"></canvas>
+        <div class="info-card" style="margin-top: 14px; background: #f8fafc;">
+          <strong>💡 提高辨識率小技巧</strong>
+          <p style="margin: 0; font-size: 0.95rem; line-height: 1.6; color: #475569;">
+            1. **【重要】藍色框線已縮小：** 請把發票上的 **2碼英文+8碼數字** 儘量放大並「剛好填滿」中央藍色虛線框。<br>
+            2. 避免光線直射發票產生白色反光膜，並保持環境亮度均勻。<br>
+            3. 手持請靜止 1 秒待對焦清晰後，再按下擷取按鈕。
+          </p>
+        </div>
+      </section>
+
+      <section class="card info-block">
+        <div class="info-card">
+          <p class="info-title">當前對獎期數</p>
+          <p id="currentPeriodDisplay" class="result-text" style="font-size: 1.2rem; font-weight: bold; color: #2563eb;">1-2月</p>
+        </div>
+        <div class="info-card">
+          <p class="info-title">本期中獎號碼</p>
+          <p class="result-text">
+            特別獎：<span id="specialPrize" style="font-weight: bold; color: #ef4444;">--</span><br>
+            特獎：<span id="spPrize" style="font-weight: bold; color: #f97316;">--</span><br>
+            頭獎：<span id="firstPrize" style="font-weight: bold; color: #0f172a;">--</span>
+          </p>
+        </div>
+        <div class="info-card" style="background: #f8fafc;">
+          <p class="info-title">設定自訂期數中獎號碼</p>
+          <input id="customSuperPrize" class="period-select" type="text" maxlength="8" placeholder="特別獎 8 碼" style="margin-bottom:8px;" />
+          <input id="customSpPrize" class="period-select" type="text" maxlength="8" placeholder="特獎 8 碼" style="margin-bottom:8px;" />
+          <input id="customFirstPrize" class="period-select" type="text" placeholder="頭獎 8 碼，多組請用逗號分隔" />
+          <button id="updatePrizeBtn" class="primary-btn" type="button" style="margin-top: 12px; width: 100%;">更新自訂期數號碼</button>
+        </div>
+        <div class="info-card" style="border-left: 5px solid #10b981;">
+          <p class="info-title">本次精準抓取到的唯一發票號碼</p>
+          <p id="detectedNumbers" class="result-text" style="font-size: 1.5rem; font-weight: bold; color: #059669; letter-spacing: 1px;">尚未辨識</p>
+        </div>
+        <div class="info-card" style="border-left: 5px solid #6366f1;">
+          <p class="info-title">即時對獎比對結果</p>
+          <p id="prizeResult" class="result-text" style="font-weight: bold; font-size: 1.1rem;">尚未執行對獎</p>
+        </div>
+        <div class="info-card">
+          <p class="info-title">手動輸入號碼對獎</p>
+          <input id="manualNumberInput" class="period-select" type="text" maxlength="8" placeholder="請輸入 8 碼發票號碼" />
+          <button id="manualConfirmBtn" class="primary-btn" type="button" style="margin-top: 12px; width: 100%;">手動確認號碼</button>
+        </div>
+        <div class="data-grid">
+          <div class="data-card"><span>累計辨識</span><strong id="totalCount">0</strong></div>
+          <div class="data-card"><span>中獎張數</span><strong id="winCount" style="color: #22c55e;">0</strong></div>
+          <div class="data-card"><span>總中獎率</span><strong id="winRate">0%</strong></div>
+        </div>
+        <div class="chart-card">
+          <canvas id="winnerChart"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">© 2026 完全前端多期數智慧發票即時對獎系統 (精準單碼優化版)</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.3/dist/tesseract.min.js"></script>
+  <script>
+    const LOCAL_PRIZE_DATA = {
+      "1-2月": { superPrize: '87510041', spPrize: '32220522', firstPrize: ['21677046', '44662410', '31262513'] },
+      "3-4月": { superPrize: '19531471', spPrize: '85941329', firstPrize: ['07225810', '20231230', '83518781'] }
+    };
+
+    let prizeData = LOCAL_PRIZE_DATA;
+    let chartInstance = null;
+    let cameraStream = null;
+    let totalScannedInvoices = 0; 
+    let totalWins = 0;
+
+    const OCR_FIX_TABLE = {
+      'O': '0', 'o': '0', 'Q': '0', 'D': '0', 'U': '0',
+      'I': '1', 'i': '1', 'L': '1', 'l': '1', 'j': '1',
+      'Z': '2', 'z': '2', 's': '5', 'S': '5', 'b': '8',
+      'B': '8', 'G': '6', 'g': '6', 'T': '7', 't': '7', 'A': '4',
+      '０': '0', '１': '1', '２': '2', '３': '3', '４': '4', '５': '5', '６': '6', '７': '7', '８': '8', '９': '9'
+    };
+
+    const statusText = document.getElementById('statusText');
+    const currentPeriodDisplay = document.getElementById('currentPeriodDisplay');
+    const periodSelect = document.getElementById('periodSelect');
+    const customRangeBlock = document.getElementById('customRangeBlock');
+    const startMonth = document.getElementById('startMonth');
+    const endMonth = document.getElementById('endMonth');
+    const specialPrizeEl = document.getElementById('specialPrize');
+    const spPrizeEl = document.getElementById('spPrize');
+    const firstPrizeEl = document.getElementById('firstPrize');
+    const cameraVideo = document.getElementById('cameraVideo');
+    const snapshotCanvas = document.getElementById('snapshotCanvas');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const startCameraBtn = document.getElementById('startCameraBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const resetCountBtn = document.getElementById('resetCountBtn');
+    const uploadImageInput = document.getElementById('uploadImageInput');
+    const customSuperPrizeInput = document.getElementById('customSuperPrize');
+    const customSpPrizeInput = document.getElementById('customSpPrize');
+    const customFirstPrizeInput = document.getElementById('customFirstPrize');
+    const updatePrizeBtn = document.getElementById('updatePrizeBtn');
+    const manualNumberInput = document.getElementById('manualNumberInput');
+    const manualConfirmBtn = document.getElementById('manualConfirmBtn');
+    const detectedNumbersEl = document.getElementById('detectedNumbers');
+    const prizeResultEl = document.getElementById('prizeResult');
+    const totalCountEl = document.getElementById('totalCount');
+    const winCountEl = document.getElementById('winCount');
+    const winRateEl = document.getElementById('winRate');
+    const winnerChart = document.getElementById('winnerChart');
+
+    async function loadPrizeJson() {
+      if (window.location.protocol === 'file:') {
+        statusText.textContent = '本機檔案模式(file://)已自動加載內置最新中獎資料。';
+        prizeData = LOCAL_PRIZE_DATA;
+        return;
+      }
+      try {
+        statusText.textContent = '網路通訊正常，嘗試讀取外部獎號設定檔...';
+        const response = await fetch('./prize.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        prizeData = await response.json();
+        statusText.textContent = '中獎號碼設定同步成功！AI 引擎就緒。';
+      } catch (error) {
+        prizeData = LOCAL_PRIZE_DATA;
+        statusText.textContent = '未偵測到外部 prize.json，系統已切換至內建離線備援資料組。';
+      }
+    }
+
+    function normalizeText(rawText) {
+      return rawText.split('').map((char) => OCR_FIX_TABLE[char] || char).join('');
+    }
+
+    function isLikelyDate(number) {
+      if (!/^\d{8}$/.test(number)) return false;
+      const year = parseInt(number.slice(0, 4), 10);
+      const month = parseInt(number.slice(4, 6), 10);
+      const day = parseInt(number.slice(6, 8), 10);
+      if (year >= 2020 && year <= 2035 && month >= 1 && month <= 12) {
+        const daysInMonth = new Date(year, month, 0).getDate();
+        return day >= 1 && day <= daysInMonth;
+      }
+      return false;
+    }
+
+    function isValidInvoiceCandidate(number) {
+      if (!/^\d{8}$/.test(number)) return false;
+      if (/^(\d)\1{7}$/.test(number)) return false; 
+      if (isLikelyDate(number)) return false;
+      return true;
+    }
+
+    function validateManualNumber(value) {
+      return /^\d{8}$/.test(value.trim());
+    }
+
+    function getCurrentPeriodKey() {
+      if (periodSelect.value !== 'custom') return periodSelect.value;
+      const start = parseInt(startMonth.value, 10);
+      const end = parseInt(endMonth.value, 10);
+      if (isNaN(start) || isNaN(end) || start < 1 || start > 12 || end < 1 || end > 12 || start > end) {
+        return "自訂期間";
+      }
+      return `${start}-${end}月`;
+    }
+
+    // 更新界面（只處理單一發票號碼）
+    function updateResultsForSingleNumber(finalNumber, selectedPeriod) {
+      if (!finalNumber) {
+        detectedNumbersEl.textContent = '未偵測到有效 8 碼號碼';
+        prizeResultEl.textContent = '無對獎結果';
+        return;
+      }
+      
+      totalScannedInvoices++;
+      const resultText = matchPrize(finalNumber, selectedPeriod);
+      const isWin = !resultText.includes('未中獎');
+      if (isWin) totalWins++;
+
+      detectedNumbersEl.textContent = finalNumber;
+      prizeResultEl.textContent = `${finalNumber} → ${resultText}`;
+      renderChart(totalScannedInvoices, totalWins);
+    }
+
+    function confirmManualNumber() {
+      const manualValue = manualNumberInput.value.trim();
+      if (!validateManualNumber(manualValue)) {
+        statusText.textContent = '錯誤：請輸入完整且合法的 8 碼發票號碼。';
+        return;
+      }
+      const currentPeriod = getCurrentPeriodKey();
+      currentPeriodDisplay.textContent = currentPeriod;
+      updateResultsForSingleNumber(manualValue, currentPeriod);
+      statusText.textContent = `手動確認成功！已對獎號碼：${manualValue}`;
+      manualNumberInput.value = '';
+    }
+
+    function syncCustomPrizeInputs(periodKey) {
+      let actualKey = (periodKey === 'custom') ? getCurrentPeriodKey() : periodKey;
+      const period = prizeData[actualKey] || {};
+      customSuperPrizeInput.value = period.superPrize || '';
+      customSpPrizeInput.value = period.spPrize || '';
+      customFirstPrizeInput.value = (period.firstPrize || []).join(', ');
+    }
+
+    function updateUiLayout() {
+      const isCustom = periodSelect.value === 'custom';
+      customRangeBlock.style.display = isCustom ? 'grid' : 'none';
+      customSuperPrizeInput.disabled = !isCustom;
+      customSpPrizeInput.disabled = !isCustom;
+      customFirstPrizeInput.disabled = !isCustom;
+      updatePrizeBtn.disabled = !isCustom;
+      currentPeriodDisplay.textContent = getCurrentPeriodKey();
+      renderCurrentPeriodPrize();
+    }
+
+    function renderCurrentPeriodPrize() {
+      const periodKey = periodSelect.value;
+      let actualKey = (periodKey === 'custom') ? getCurrentPeriodKey() : periodKey;
+      const period = prizeData[actualKey] || {};
+      const superPrize = period.superPrize || customSuperPrizeInput.value.trim() || '--';
+      const spPrize = period.spPrize || customSpPrizeInput.value.trim() || '--';
+      let firstPrizeList = period.firstPrize || [];
+      if (firstPrizeList.length === 0 && customFirstPrizeInput.value.trim()) {
+        firstPrizeList = customFirstPrizeInput.value.trim().split(/[,\s，]+/).filter(Boolean);
+      }
+      specialPrizeEl.textContent = superPrize;
+      spPrizeEl.textContent = spPrize;
+      firstPrizeEl.textContent = firstPrizeList.length > 0 ? firstPrizeList.join(' 、 ') : '--';
+    }
+
+    function updateCustomPrizeNumbers() {
+      const selectedPeriod = getCurrentPeriodKey();
+      if (selectedPeriod === "自訂期間") {
+        statusText.textContent = '自訂期間月份格式設定有誤。';
+        return;
+      }
+      const superPrize = customSuperPrizeInput.value.trim();
+      const spPrize = customSpPrizeInput.value.trim();
+      const firstPrizeText = customFirstPrizeInput.value.trim();
+      if (!validateManualNumber(superPrize) || !validateManualNumber(spPrize)) {
+        statusText.textContent = '自訂失敗：特別獎與特獎必須是 8 位阿拉伯數字。';
+        return;
+      }
+      const firstPrizeList = firstPrizeText.split(/[,\s，]+/).filter(Boolean).map(v => v.trim());
+      if (firstPrizeList.length === 0 || firstPrizeList.some(v => !validateManualNumber(v))) {
+        statusText.textContent = '自訂失敗：頭獎號碼必須全為 8 碼數字組合。';
+        return;
+      }
+      prizeData[selectedPeriod] = { superPrize, spPrize, firstPrize: firstPrizeList };
+      renderCurrentPeriodPrize();
+      statusText.textContent = `成功！已手動複寫「${selectedPeriod}」比對數據。`;
+    }
+
+    function advancedImageProcessing(sourceCanvas) {
+      const w = sourceCanvas.width;
+      const h = sourceCanvas.height;
+      
+      const scale = 2.0; // 放大至 2 倍，讓數字字元邊緣極致清晰
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(w * scale);
+      canvas.height = Math.floor(h * scale);
+      const ctx = canvas.getContext('2d');
+      
+      ctx.filter = 'contrast(300%) brightness(120%) saturate(0%)';
+      ctx.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+      ctx.filter = 'none';
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      const totalPixels = canvas.width * canvas.height;
+      
+      const histogram = new Array(256).fill(0);
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+        data[i] = data[i+1] = data[i+2] = gray;
+        histogram[gray]++;
+      }
+
+      let sum = 0;
+      for (let t = 0; t < 256; t++) sum += t * histogram[t];
+      
+      let sumB = 0;
+      let wB = 0;
+      let wF = 0;
+      let varMax = 0;
+      let threshold = 128;
+
+      for (let t = 0; t < 256; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+        wF = totalPixels - wB;
+        if (wF === 0) break;
+        sumB += t * histogram[t];
+        let mB = sumB / wB;
+        let mF = (sum - sumB) / wF;
+        let varBetween = wB * wF * (mB - mF) * (mB - mF);
+        if (varBetween > varMax) {
+          varMax = varBetween;
+          threshold = t;
+        }
+      }
+
+      threshold = Math.max(90, Math.min(210, threshold));
+
+      for (let i = 0; i < data.length; i += 4) {
+        const v = data[i] > threshold ? 255 : 0;
+        data[i] = data[i+1] = data[i+2] = v;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+
+      const sharpCanvas = document.createElement('canvas');
+      sharpCanvas.width = canvas.width;
+      sharpCanvas.height = canvas.height;
+      const sCtx = sharpCanvas.getContext('2d');
+      sCtx.drawImage(canvas, 0, 0);
+      
+      const sData = sCtx.getImageData(0, 0, sharpCanvas.width, sharpCanvas.height);
+      const sPixels = sData.data;
+      const copyPixels = new Uint8ClampedArray(sPixels);
+      
+      const k = [ 0, -1,  0, 
+                 -1,  5, -1, 
+                  0, -1,  0]; 
+                  
+      const width = sharpCanvas.width;
+      for (let y = 1; y < sharpCanvas.height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let res = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const idx = ((y + ky) * width + (x + kx)) * 4;
+              const kernelVal = k[(ky + 1) * 3 + (kx + 1)];
+              res += copyPixels[idx] * kernelVal;
+            }
+          }
+          const targetIdx = (y * width + x) * 4;
+          const finalVal = Math.min(255, Math.max(0, res));
+          sPixels[targetIdx] = sPixels[targetIdx+1] = sPixels[targetIdx+2] = finalVal;
+        }
+      }
+      
+      sCtx.putImageData(sData, 0, 0);
+      return sharpCanvas;
+    }
+
+    function cropGuideArea(sourceCanvas) {
+      const w = sourceCanvas.width;
+      const h = sourceCanvas.height;
+      // 縮小核心瞄準框範圍（更精準貼合發票號碼，排除大範圍雜訊）
+      const cropW = Math.floor(w * 0.80);
+      const cropH = Math.floor(h * 0.20);
+      const sx = Math.floor((w - cropW) / 2);
+      const sy = Math.floor(h * 0.25);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(sourceCanvas, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+      return canvas;
+    }
+
+    /**
+     * 精準化核心改良：
+     * 利用 Tesseract 的 word.bbox 計算文字方塊的面積大小。
+     * 發票號碼的字體在觀景窗中一定是最大的，藉此百分之百剔除其他小字。
+     */
+    async function recognizeSingleBestInvoice(processedCanvas) {
+      const candidatesMap = new Map(); // 用來存儲數字與對應最大面積
+
+      // 使用 PSM 7 (單行文字) 與 6 (單一均勻文本塊)
+      const targetPsms = [7, 6]; 
+
+      for (const psm of targetPsms) {
+        try {
+          const result = await Tesseract.recognize(processedCanvas, 'eng', {
+            logger: (m) => {
+              if (m.status === 'recognizing text') {
+                statusText.textContent = `精準對焦辨識中... ${Math.round(m.progress * 100)}%`;
+              }
+            },
+            tessedit_char_whitelist: '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-',
+            tessedit_pageseg_mode: psm
+          });
+
+          if (result.data && result.data.words) {
+            result.data.words.forEach(word => {
+              const cleanedWordText = normalizeText(word.text);
+              // 使用正則提取 8 碼數字
+              const regexPattern = /(?:\d[\s\-_.\/\\,]*){8}/g;
+              const matches = cleanedWordText.match(regexPattern) || [];
+
+              matches.forEach((rawMatch) => {
+                const pureDigits = rawMatch.replace(/[^\d]/g, '');
+                if (pureDigits.length === 8 && isValidInvoiceCandidate(pureDigits)) {
+                  // 計算該區塊的文字面積大小
+                  const box = word.bbox;
+                  const area = (box.x1 - box.x0) * (box.y1 - box.y0);
+                  
+                  if (!candidatesMap.has(pureDigits) || candidatesMap.get(pureDigits) < area) {
+                    candidatesMap.set(pureDigits, area);
+                  }
+                }
+              });
+            });
+          }
+        } catch (e) {
+          console.warn("OCR 管道異常，自動跳過：", e);
+        }
+      }
+
+      if (candidatesMap.size === 0) return null;
+
+      // 排序找出文字印出來「面積最大」的那個號碼（即核心發票號碼）
+      const sortedByArea = Array.from(candidatesMap.entries()).sort((a, b) => b[1] - a[1]);
+      return sortedByArea[0][0]; 
+    }
+
+    function matchPrize(number, periodKey) {
+      let period = prizeData[periodKey] || {};
+      const isCustomSelected = periodSelect.value === 'custom';
+      if (isCustomSelected && (!period.superPrize && !period.spPrize && (!period.firstPrize || period.firstPrize.length === 0))) {
+        period = {
+          superPrize: customSuperPrizeInput.value.trim(),
+          spPrize: customSpPrizeInput.value.trim(),
+          firstPrize: customFirstPrizeInput.value.trim().split(/[,\s，]+/).filter(Boolean)
+        };
+      }
+      if (number === period.superPrize) return '🎉 特別獎（1000 萬元大獎！）';
+      if (number === period.spPrize) return '🎉 特獎（200 萬元！）';
+      const firstPrizes = period.firstPrize || [];
+      for (let i = 0; i < firstPrizes.length; i++) {
+        const first = firstPrizes[i];
+        const g = i + 1;
+        if (number === first) return `頭獎（20 萬元，與第 ${g} 組完全相同）`;
+        if (number.slice(-7) === first.slice(-7)) return `二獎（4 萬元，末 7 碼相同）`;
+        if (number.slice(-6) === first.slice(-6)) return `三獎（1 萬元，末 6 碼相同）`;
+        if (number.slice(-5) === first.slice(-5)) return `四獎（4,000 元，末 5 碼相同）`;
+        if (number.slice(-4) === first.slice(-4)) return `五獎（1,000 元，末 4 碼相同）`;
+        if (number.slice(-3) === first.slice(-3)) return `六獎（200 元，末 3 碼相同）`;
+      }
+      return '未中獎';
+    }
+
+    function renderChart(totalCount, winCount) {
+      const loseCount = totalCount - winCount;
+      const winRate = totalCount > 0 ? Math.round((winCount / totalCount) * 100) : 0;
+      totalCountEl.textContent = totalCount;
+      winCountEl.textContent = winCount;
+      winRateEl.textContent = `${winRate}%`;
+      const data = {
+        labels: ['中獎', '沒中獎'],
+        datasets: [{ data: [winCount, loseCount], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }]
+      };
+      if (!chartInstance) {
+        chartInstance = new Chart(winnerChart, { type: 'pie', data, options: { responsive: true, plugins: { legend: { position: 'bottom' } } } });
+      } else {
+        chartInstance.data = data;
+        chartInstance.update();
+      }
+    }
+
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        statusText.textContent = '不支援錯誤：此瀏覽器不開放相機使用權限。';
+        return;
+      }
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+          audio: false 
+        });
+        cameraVideo.srcObject = cameraStream;
+        statusText.textContent = '觀景窗已就位，請將發票號碼置於對焦框內。';
+      } catch (error) {
+        statusText.textContent = '相機啟動異常，請確保無其他網頁佔用鏡頭。';
+      }
+    }
+
+    function showPreview(canvas) {
+      previewCanvas.width = canvas.width;
+      previewCanvas.height = canvas.height;
+      const ctx = previewCanvas.getContext('2d');
+      ctx.drawImage(canvas, 0, 0);
+      previewCanvas.style.display = 'block';
+    }
+
+    function resetRecognitionCount() {
+      totalScannedInvoices = 0;
+      totalWins = 0;
+      detectedNumbersEl.textContent = '尚未辨識';
+      prizeResultEl.textContent = '尚未執行對獎';
+      renderChart(0, 0);
+      statusText.textContent = '歷史對獎數據已刷新清除。';
+    }
+
+    async function captureAndCheck() {
+      if (!cameraStream) {
+        statusText.textContent = '請先啟用攝影機，再執行截圖辨識。';
+        return;
+      }
+      statusText.textContent = '正在攔截畫面，啟動邊緣計算前處理...';
+      const w = cameraVideo.videoWidth;
+      const h = cameraVideo.videoHeight;
+      if (!w || !h) {
+        statusText.textContent = '串流緩衝中，請重新再試。';
+        return;
+      }
+
+      snapshotCanvas.width = w;
+      snapshotCanvas.height = h;
+      const ctx = snapshotCanvas.getContext('2d');
+      ctx.drawImage(cameraVideo, 0, 0, w, h);
+
+      const cropped = cropGuideArea(snapshotCanvas);
+      const preprocessed = advancedImageProcessing(cropped);
+      showPreview(preprocessed);
+
+      try {
+        const finalBestNumber = await recognizeSingleBestInvoice(preprocessed);
+        const curPeriod = getCurrentPeriodKey();
+        currentPeriodDisplay.textContent = curPeriod;
+
+        if (!finalBestNumber) {
+          statusText.textContent = '精準過濾提示：未捕捉到清晰且足夠大字體的 8 碼發票數字，請靠近對齊。';
+          return;
+        }
+
+        updateResultsForSingleNumber(finalBestNumber, curPeriod);
+        statusText.textContent = `精準辨識成功！成功過濾其餘背景號碼。`;
+      } catch (error) {
+        console.error(error);
+        statusText.textContent = '辨識管線意外中斷，請重整頁面。';
+      }
+    }
+
+    async function performOCRFromImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          const maxW = 1200;
+          const scale = Math.min(1, maxW / img.width);
+          canvas.width = Math.floor(img.width * scale);
+          canvas.height = Math.floor(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          
+          const preprocessed = advancedImageProcessing(canvas);
+          showPreview(preprocessed);
+          try {
+            const bestNumber = await recognizeSingleBestInvoice(preprocessed);
+            resolve(bestNumber);
+          } catch (e) { reject(e); }
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    window.onload = async () => {
+      await loadPrizeJson();
+      updateUiLayout();
+      syncCustomPrizeInputs(periodSelect.value);
+      renderChart(0, 0);
+    };
+
+    periodSelect.addEventListener('change', () => {
+      updateUiLayout();
+      syncCustomPrizeInputs(periodSelect.value);
+    });
+
+    startMonth.addEventListener('input', () => {
+      if (periodSelect.value === 'custom') {
+        currentPeriodDisplay.textContent = getCurrentPeriodKey();
+        renderCurrentPeriodPrize();
+        syncCustomPrizeInputs('custom');
+      }
+    });
+    endMonth.addEventListener('input', () => {
+      if (periodSelect.value === 'custom') {
+        currentPeriodDisplay.textContent = getCurrentPeriodKey();
+        renderCurrentPeriodPrize();
+        syncCustomPrizeInputs('custom');
+      }
+    });
+
+    startCameraBtn.addEventListener('click', startCamera);
+    captureBtn.addEventListener('click', captureAndCheck);
+    resetCountBtn.addEventListener('click', resetRecognitionCount);
+    updatePrizeBtn.addEventListener('click', updateCustomPrizeNumbers);
+    manualConfirmBtn.addEventListener('click', confirmManualNumber);
+    
+    uploadImageInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      statusText.textContent = '圖片上傳成功，開始提取精準發票文字...';
+      try {
+        const bestNumber = await performOCRFromImage(file);
+        const curPeriod = getCurrentPeriodKey();
+        currentPeriodDisplay.textContent = curPeriod;
+        updateResultsForSingleNumber(bestNumber, curPeriod);
+        statusText.textContent = `圖片辨識流程結束。`;
+      } catch (err) {
+        statusText.textContent = '讀取圖片失敗，請確認檔案格式。';
+      }
+    });
+  </script>
+</body>
+</html>
